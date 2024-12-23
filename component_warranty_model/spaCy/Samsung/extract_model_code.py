@@ -3,13 +3,13 @@ import pandas as pd
 from openpyxl import load_workbook
 
 # Load the fine-tuned spaCy model
-nlp = spacy.load("component_warranty_model/spaCy/fine_tune_model")
+nlp = spacy.load("component_warranty_model/spaCy/Samsung/fine_tune_model")
 
 # Load the Excel file containing the list of texts
 input_file_path = "component_warranty_model/Data/Samsung/extracted_models_samsung.xlsx"
-sheet_name = "Sample Data 002"
+sheet_name = "Sample Data 003"
 output_file_path = "component_warranty_model/Data/Samsung/extracted_models_samsung.xlsx"
-output_sheet_name = "Extracted Models 002"
+output_sheet_name = "Extracted Models 003"
 
 df = pd.read_excel(input_file_path, sheet_name=sheet_name)
 

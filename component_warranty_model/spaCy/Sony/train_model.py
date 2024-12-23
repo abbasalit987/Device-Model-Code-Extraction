@@ -7,23 +7,18 @@ from spacy.matcher import Matcher
 from openpyxl import load_workbook
 from spacy.training import offsets_to_biluo_tags
 
-# Load the pre-trained model
 nlp = spacy.load("en_core_web_sm")
 
-# Add NER pipeline if it doesn't exist
 if "ner" not in nlp.pipe_names:
     ner = nlp.create_pipe("ner")
     nlp.add_pipe(ner, last=True)
 else:
     ner = nlp.get_pipe("ner")
 
-# Add the 'MODEL' label
 ner.add_label("MODEL")
 
-# Load your data
 df = pd.read_excel("component_warranty_model/Data/Sony/extracted_models_sony.xlsx", sheet_name='Extracted Models 003')
 
-# Enhanced Span Matching Function with Regex
 def extract_model_spans(text, extracted_model):
     """
     Matches extracted model codes within text using regex for flexible matching.
@@ -41,27 +36,23 @@ def extract_model_spans(text, extracted_model):
         return [(start_idx, end_idx, "MODEL")]
     return []
 
-# Function to check entity alignment
 def check_alignment(text, entities):
     doc = nlp.make_doc(text)
     biluo_tags = offsets_to_biluo_tags(doc, entities)
     print("Alignment check:", biluo_tags)
 
-# Lists to store training data and unmatched cases
 training_data = []
 unmatched_data = []
 
-# Process each row in the DataFrame
 for _, row in df.iterrows():
     text = row['Model Description']
     extracted_model = row['Model Code']
 
-    # Get entity spans using enhanced regex matching
     entities = extract_model_spans(text, extracted_model)
 
     # Check alignment before appending to training data
     if entities:
-        check_alignment(text, entities)  # This will print the alignment check for each entity
+        check_alignment(text, entities)
         annotations = {"entities": entities}
         doc = nlp.make_doc(text)
         training_data.append(Example.from_dict(doc, annotations))
@@ -72,7 +63,6 @@ for _, row in df.iterrows():
             "reason": "No matching spans found"
         })
 
-# Save unmatched data for analysis
 unmatched_df = pd.DataFrame(unmatched_data)
 unmatched_df.to_excel("component_warranty_model/Data/Sony/unmatched_cases.xlsx", index=False)
 

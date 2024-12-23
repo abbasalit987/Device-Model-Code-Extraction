@@ -1,77 +1,67 @@
 import spacy
 import random
 import pandas as pd
-import difflib
 import re
-
 from spacy.training.example import Example
+from spacy.matcher import Matcher
+from openpyxl import load_workbook
+from spacy.training import offsets_to_biluo_tags
 
-# Load the pre-trained model
 nlp = spacy.load("en_core_web_sm")
 
-# Add NER pipeline if it doesn't exist
 if "ner" not in nlp.pipe_names:
     ner = nlp.create_pipe("ner")
     nlp.add_pipe(ner, last=True)
 else:
     ner = nlp.get_pipe("ner")
 
-# Add the 'MODEL' label
 ner.add_label("MODEL")
 
 df = pd.read_excel("component_warranty_model/Data/Samsung/extracted_models_samsung.xlsx", sheet_name='Training Data')
 
-# Function to split text using multiple delimiters
-def advanced_split(text):
-    return re.split(r'[ "\'/-]', text)  # Splits by space, double quotes, single quotes, hyphen, or slash
+def extract_model_spans(text, extracted_model):
+    """
+    Matches extracted model codes within text using regex for flexible matching.
+    """
+    if not isinstance(text, str) or not isinstance(extracted_model, str):
+        return []
+    
+    # Escape special regex characters and allow dashes or spaces for matching
+    pattern = re.escape(extracted_model).replace(r'\-', r'[-\s]*')  # Allow '-' and spaces
+    match = re.search(pattern, text, re.IGNORECASE)
 
-# Lists to store matched and unmatched cases
+    if match:
+        start_idx = match.start()
+        end_idx = match.end()
+        return [(start_idx, end_idx, "MODEL")]
+    return []
+
+def check_alignment(text, entities):
+    doc = nlp.make_doc(text)
+    biluo_tags = offsets_to_biluo_tags(doc, entities)
+    print("Alignment check:", biluo_tags)
+
 training_data = []
 unmatched_data = []
 
 for _, row in df.iterrows():
     text = row['Model Description']
-    extracted_model = row['extracted_model']
-    annotation_label = "MODEL"  # E.g., "MODEL"
+    extracted_model = row['Model Code']
 
-    # Split the text using the advanced split function
-    text_tokens = advanced_split(text)
-    
-    # Try to find the closest match position
-    match = difflib.get_close_matches(extracted_model, text_tokens, n=1, cutoff=0.5)  # Adjust cutoff for flexibility
+    entities = extract_model_spans(text, extracted_model)
 
-    if match:
-        # Calculate start and end indices of the closest match
-        matched_model = match[0]
-        start_idx = text.find(matched_model)
-        end_idx = start_idx + len(matched_model)
-
-        if start_idx != -1:
-            annotations = {
-                "entities": [(start_idx, end_idx, annotation_label)]
-            }
-            training_data.append(Example.from_dict(nlp.make_doc(text), annotations))
-        else:
-            unmatched_data.append({
-                "text": text,
-                "extracted_model": extracted_model,
-                "reason": "Partial match found but could not calculate indices"
-            })
+    if entities:
+        check_alignment(text, entities)
+        annotations = {"entities": entities}
+        doc = nlp.make_doc(text)
+        training_data.append(Example.from_dict(doc, annotations))
     else:
-        # Add to training data with placeholder annotation for unmatched cases
-        annotations = {
-            "entities": []  # No entities annotated for unmatched cases
-        }
-        training_data.append(Example.from_dict(nlp.make_doc(text), annotations))
-        
-        # Add unmatched case to separate list
         unmatched_data.append({
             "text": text,
             "extracted_model": extracted_model,
-            "reason": "No match found"
+            "reason": "No matching spans found"
         })
 
-# Save unmatched data for analysis
 unmatched_df = pd.DataFrame(unmatched_data)
 unmatched_df.to_excel("component_warranty_model/Data/Samsung/unmatched_cases.xlsx", index=False)
 
@@ -82,7 +72,8 @@ optimizer = nlp.resume_training()
 for epoch in range(10):
     random.shuffle(training_data)
     for batch in spacy.util.minibatch(training_data, size=2):
-        nlp.update(batch)
+        nlp.update(batch, sgd=optimizer)
 
 # Save the fine-tuned model
 nlp.to_disk("component_warranty_model/spaCy/Samsung/fine_tune_model")
+print("Training completed successfully!")

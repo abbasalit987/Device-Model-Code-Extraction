@@ -92,7 +92,7 @@ def main():
     for epoch in range(10):
         random.shuffle(training_data)
         for batch in spacy.util.minibatch(training_data, size=2):
-            nlp.update(batch)
+            nlp.update(batch, sgd=optimizer)
 
     # Save the fine-tuned model
     nlp.to_disk("fine_tuned_model")
