@@ -17,7 +17,7 @@ else:
 
 ner.add_label("MODEL")
 
-df = pd.read_excel("component_warranty_model/Data/Sony/extracted_models_sony.xlsx", sheet_name='Extracted Models 003')
+df = pd.read_excel("component_warranty_model/Data/Sony/extracted_models_sony.xlsx", sheet_name='Extracted Models 004')
 
 def extract_model_spans(text, extracted_model):
     """

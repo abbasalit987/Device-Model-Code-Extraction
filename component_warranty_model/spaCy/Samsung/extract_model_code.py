@@ -25,7 +25,7 @@ def extract_model(text):
     return models[0] if models else None  # Return the first model found, or None if no model found
 
 # Apply the function to each row in the 'Model Description' column
-df['extracted_model'] = df['Model Description'].apply(extract_model)
+df['Model Code'] = df['Model Description'].apply(extract_model)
 
 # Save the results to a new sheet in the existing Excel file
 def save_to_new_sheet(file_path, sheet_name, data):
