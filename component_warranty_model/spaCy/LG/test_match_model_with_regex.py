@@ -3,18 +3,17 @@ import re
 from datetime import datetime
 import os
 
+lg_oled_pattern_01 = r"^(LG)?[\s-]*\d{2}[\s-]*[Ee][A-Za-z][a-zA-Z0-9\-()+]*$"
+lg_oled_pattern_02 = r"^(OLED)?[\s-]*\d{2}[\s-]*[BCEGWZRbcegwzr][A-Za-z0-9][a-zA-Z0-9\-()+]*$"
+lg_oled_77_to_97_inch_pattern_01 = r"^(LG)?[\s-]*(7[7-9]|8\d{1}|9[0-7])[\s-]*[Ee][A-Za-z][a-zA-Z0-9\-()+]*$"
+lg_oled_77_to_97_inch_pattern_02 = r"^(OLED)?[\s-]*(7[7-9]|8\d{1}|9[0-7])[\s-]*[BCEGWZRbcegwzr][A-Za-z0-9][a-zA-Z0-9\-()+]*$"
 
 lg_regex_patterns = {
-    "Bravia OLED" : r"^(KD|XR)?[\s-]*\d{2}[\s-]*[aA]\d{1,4}[a-zA-Z0-9\-()+]*$",
-    "32 inch" : r"^([A-Za-z]{2,4}?[\s-]*)?32[\s-]*[A-Za-z]{1,2}\d{1,4}[a-zA-Z0-9\-()+]*$",
-    "43 inch & above" : r"^([A-Za-z]{2,4}?[\s-]*)?(4[3-9]|[5-9]\d{1,3}|[1-9]\d{3,})[\s-]*[A-Za-z]{1,2}\d{1,4}[a-zA-Z0-9\-()+]*$",
-    "XR" : r"^XR[\s-]*[a-zA-Z0-9\-()+]*$",
-    "LED" : r"^(KD|KDL|XR|KLV|K|UA)?[\s-]*\d{2}[\s-]*[xwrzspcXWRZSPU]{1,2}\d{1,4}[a-zA-Z0-9\-()+]*$",
-    "A80J" : r"^([A-Za-z]{2,4}?[\s-]*)?\d{2,4}A80J[a-zA-Z0-9\-()+]*$",
-    "A80K" : r"^([A-Za-z]{2,4}?[\s-]*)?\d{2,4}A80K[a-zA-Z0-9\-()+]*$",
-    "A80K" : r"^([A-Za-z]{2,4}?[\s-]*)?\d{2,4}A80L[a-zA-Z0-9\-()+]*$",
-    "A95K" : r"^([A-Za-z]{2,4}?[\s-]*)?\d{2,4}A95K[a-zA-Z0-9\-()+]*$",
-    "A95L" : r"^([A-Za-z]{2,4}?[\s-]*)?\d{2,4}A95L[a-zA-Z0-9\-()+]*$",
+    "OLED" : f"{lg_oled_pattern_01}|{lg_oled_pattern_02}",
+    "32 inch & above" : r"^([A-Za-z]{2,4})?[\s-]*(3[2-9]|[4-9]\d{1,3}|[1-9]\d{3,})[\s-]*[a-zA-Z0-9\-()+]*$",
+    "70 inch & above 4K LED" : r"^([A-Za-z]{2,4})?[\s-]*(7[0-9]|[8-9]\d{1,3}|[1-9]\d{3,})[\s-]*U[a-zA-Z0-9\-()+]*$",
+    "QNED" : r"^\d{2,3}QNED[a-zA-Z0-9\-()+]*$",
+    "77 - 97 inch OLED" : f"{lg_oled_77_to_97_inch_pattern_01}|{lg_oled_77_to_97_inch_pattern_02}",
 }
 
 file_path = 'component_warranty_model/Data/LG/extracted_models_lg.xlsx'
