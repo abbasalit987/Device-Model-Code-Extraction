@@ -17,7 +17,7 @@ else:
 
 ner.add_label("MODEL")
 
-df = pd.read_excel("component_warranty_model/Data/Sony/extracted_models_sony.xlsx", sheet_name='Extracted Models 004')
+df = pd.read_excel("component_warranty_model/Data/Sony/extracted_models_sony.xlsx", sheet_name='Training Data')
 
 def extract_model_spans(text, extracted_model):
     """
@@ -25,7 +25,7 @@ def extract_model_spans(text, extracted_model):
     """
     if not isinstance(text, str) or not isinstance(extracted_model, str):
         return []
-    
+
     # Escape special regex characters and allow dashes or spaces for matching
     pattern = re.escape(extracted_model).replace(r'\-', r'[-\s]*')  # Allow '-' and spaces
     match = re.search(pattern, text, re.IGNORECASE)
