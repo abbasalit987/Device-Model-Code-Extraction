@@ -24,7 +24,7 @@ else:
 ner.add_label("MODEL")
 
 # Load the training data from Excel
-df = pd.read_excel("component_warranty_model/Data/Sansui/extracted_models_sansui.xlsx", sheet_name='Extracted Models 002')
+df = pd.read_excel("component_warranty_model/Data/Sansui/extracted_models_sansui.xlsx", sheet_name='Extracted Models 001')
 
 def extract_model_spans(text, extracted_model):
     """
