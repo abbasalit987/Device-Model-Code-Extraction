@@ -10,7 +10,7 @@ from spacy.tokenizer import Tokenizer
 nlp = spacy.load("en_core_web_sm")
 
 # Custom tokenizer to prevent splitting on spaces, hyphens, and other special characters
-infix_re = re.compile(r'''[.\-/():#]''')  # Customize for dots, hyphens, colons, parentheses
+infix_re = re.compile(r'''[.\-/():#|+]''')  # Customize for dots, hyphens, colons, parentheses
 nlp.tokenizer = Tokenizer(nlp.vocab, infix_finditer=infix_re.finditer)
 
 # If 'ner' pipe doesn't exist, create one
@@ -42,6 +42,8 @@ def extract_model_spans(text, extracted_model):
     pattern = pattern.replace(r'\:', r'[\:\s]*')  # Allow colon and spaces
     pattern = pattern.replace(r'\s', r'[\s]*')  # Allow for any spaces between parts
     pattern = pattern.replace(r'\#', r'[\s]*')  # Allow for any numbers between parts
+    pattern = pattern.replace(r'\|', r'[\s]*')  # Allow for any | between parts
+    pattern = pattern.replace(r'\+', r'[\s]*')  # Allow for any + between parts
 
     match = re.search(pattern, text, re.IGNORECASE)
 
@@ -86,10 +88,32 @@ unmatched_df.to_excel("component_warranty_model/Data/LG/unmatched_cases.xlsx", i
 # Set up the optimizer for training
 optimizer = nlp.resume_training()
 
+def calculate_training_params(training_data_size):
+    """
+    Dynamically calculate epoch and batch size based on training data size.
+    """
+    if training_data_size <= 500:
+        batch_size = 8
+        epochs = 50
+    elif training_data_size <= 5000:
+        batch_size = 32
+        epochs = 20
+    else:
+        batch_size = 128
+        epochs = 10
+    return batch_size, epochs
+
+# Determine batch size and epoch count based on training data size
+training_data_size = len(training_data)
+batch_size, epochs = calculate_training_params(training_data_size)
+
+print(f"Training data size: {training_data_size}")
+print(f"Batch size: {batch_size}, Epochs: {epochs}")
+
 # Training loop
-for epoch in range(10):
+for epoch in range(epochs):
     random.shuffle(training_data)
-    for batch in spacy.util.minibatch(training_data, size=2):
+    for batch in spacy.util.minibatch(training_data, size=batch_size):
         nlp.update(batch, sgd=optimizer)
 
 # Save the fine-tuned model

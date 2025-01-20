@@ -10,7 +10,7 @@ from spacy.tokenizer import Tokenizer
 nlp = spacy.load("en_core_web_sm")
 
 # Custom tokenizer to prevent splitting on spaces, hyphens, and other special characters
-infix_re = re.compile(r'''[.\-/():#|]''')  # Customize for dots, hyphens, colons, parentheses
+infix_re = re.compile(r'''[.\-/():#|+]''')  # Customize for dots, hyphens, colons, parentheses
 nlp.tokenizer = Tokenizer(nlp.vocab, infix_finditer=infix_re.finditer)
 
 # If 'ner' pipe doesn't exist, create one
@@ -43,6 +43,7 @@ def extract_model_spans(text, extracted_model):
     pattern = pattern.replace(r'\s', r'[\s]*')  # Allow for any spaces between parts
     pattern = pattern.replace(r'\#', r'[\s]*')  # Allow for any numbers between parts
     pattern = pattern.replace(r'\|', r'[\s]*')  # Allow for any | between parts
+    pattern = pattern.replace(r'\+', r'[\s]*')  # Allow for any + between parts
 
     match = re.search(pattern, text, re.IGNORECASE)
 

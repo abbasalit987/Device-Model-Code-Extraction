@@ -8,7 +8,7 @@ nlp = spacy.load("component_warranty_model/spaCy/Xiaomi/fine_tune_model")
 input_file_path = "component_warranty_model/Data/Xiaomi/extracted_models_xiaomi.xlsx"
 sheet_name = "Sample Data 004"
 output_file_path = "component_warranty_model/Data/Xiaomi/extracted_models_xiaomi.xlsx"
-output_sheet_name = "Extracted Models 004"
+output_sheet_name = "Extracted Models 005"
 
 df = pd.read_excel(input_file_path, sheet_name=sheet_name)
 

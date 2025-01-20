@@ -6,9 +6,9 @@ from openpyxl import load_workbook
 nlp = spacy.load("component_warranty_model/spaCy/Haier/fine_tune_model")
 
 input_file_path = "component_warranty_model/Data/Haier/extracted_models_haier.xlsx"
-sheet_name = "Sample Data 002"
+sheet_name = "Sample Data 003"
 output_file_path = "component_warranty_model/Data/Haier/extracted_models_haier.xlsx"
-output_sheet_name = "Extracted Models 002"
+output_sheet_name = "Extracted Models 003"
 
 df = pd.read_excel(input_file_path, sheet_name=sheet_name)
 

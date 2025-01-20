@@ -85,7 +85,7 @@ unmatched_df = pd.DataFrame(unmatched_data)
 unmatched_df.to_excel("component_warranty_model/Data/Samsung/unmatched_cases.xlsx", index=False)
 
 # Set up the optimizer for training
-optimizer = nlp.resume_training()
+optimizer = nlp.begin_training()
 
 def calculate_training_params(training_data_size):
     """

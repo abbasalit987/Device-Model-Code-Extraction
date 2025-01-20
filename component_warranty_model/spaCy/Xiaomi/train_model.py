@@ -10,7 +10,9 @@ from spacy.tokenizer import Tokenizer
 nlp = spacy.load("en_core_web_sm")
 
 # Custom tokenizer to prevent splitting on spaces, hyphens, and other special characters
-infix_re = re.compile(r'''[.\-/():#]''')  # Customize for dots, hyphens, colons, parentheses
+infix_re = re.compile(
+    r"""[.\-/():#|+]"""
+)  # Customize for dots, hyphens, colons, parentheses
 nlp.tokenizer = Tokenizer(nlp.vocab, infix_finditer=infix_re.finditer)
 
 # If 'ner' pipe doesn't exist, create one
@@ -24,7 +26,11 @@ else:
 ner.add_label("MODEL")
 
 # Load the training data from Excel
-df = pd.read_excel("component_warranty_model/Data/Xiaomi/extracted_models_xiaomi.xlsx", sheet_name='Extracted Models 003')
+df = pd.read_excel(
+    "component_warranty_model/Data/Xiaomi/extracted_models_xiaomi.xlsx",
+    sheet_name="Extracted Models 004",
+)
+
 
 def extract_model_spans(text, extracted_model):
     """
@@ -35,14 +41,17 @@ def extract_model_spans(text, extracted_model):
         return []
 
     # Pattern to allow matching model code with spaces, numbers, hyphens, and alphanumeric sequences
-    pattern = re.escape(extracted_model).replace(r'\-', r'[-\s]*')  # Allow dashes and spaces
-    pattern = pattern.replace(r'\.', r'[.\s]*')  # Allow periods and spaces
-    pattern = pattern.replace(r'\(', r'[\(\s]*')  # Allow opening parentheses and spaces
-    pattern = pattern.replace(r'\)', r'[\)\s]*')  # Allow closing parentheses and spaces
-    pattern = pattern.replace(r'\:', r'[\:\s]*')  # Allow colon and spaces
-    pattern = pattern.replace(r'\s', r'[\s]*')  # Allow for any spaces between parts
-    pattern = pattern.replace(r'\#', r'[\s]*')  # Allow for any numbers between parts
-    pattern = pattern.replace(r'\|', r'[\s]*')  # Allow for any | between parts
+    pattern = re.escape(extracted_model).replace(
+        r"\-", r"[-\s]*"
+    )  # Allow dashes and spaces
+    pattern = pattern.replace(r"\.", r"[.\s]*")  # Allow periods and spaces
+    pattern = pattern.replace(r"\(", r"[\(\s]*")  # Allow opening parentheses and spaces
+    pattern = pattern.replace(r"\)", r"[\)\s]*")  # Allow closing parentheses and spaces
+    pattern = pattern.replace(r"\:", r"[\:\s]*")  # Allow colon and spaces
+    pattern = pattern.replace(r"\s", r"[\s]*")  # Allow for any spaces between parts
+    pattern = pattern.replace(r"\#", r"[\s]*")  # Allow for any numbers between parts
+    pattern = pattern.replace(r"\|", r"[\s]*")  # Allow for any | between parts
+    pattern = pattern.replace(r"\+", r"[\s]*")  # Allow for any + between parts
 
     match = re.search(pattern, text, re.IGNORECASE)
 
@@ -52,18 +61,20 @@ def extract_model_spans(text, extracted_model):
         return [(start_idx, end_idx, "MODEL")]
     return []
 
+
 def check_alignment(text, entities):
     doc = nlp.make_doc(text)
     biluo_tags = offsets_to_biluo_tags(doc, entities)
     print("Alignment check:", biluo_tags)
+
 
 # Prepare training data and unmatched data
 training_data = []
 unmatched_data = []
 
 for _, row in df.iterrows():
-    text = row['Model Description']
-    extracted_model = row['Model Code']
+    text = row["Model Description"]
+    extracted_model = row["Model Code"]
 
     entities = extract_model_spans(text, extracted_model)
 
@@ -74,18 +85,23 @@ for _, row in df.iterrows():
         doc = nlp.make_doc(text)
         training_data.append(Example.from_dict(doc, annotations))
     else:
-        unmatched_data.append({
-            "text": text,
-            "extracted_model": extracted_model,
-            "reason": "No matching spans found"
-        })
+        unmatched_data.append(
+            {
+                "text": text,
+                "extracted_model": extracted_model,
+                "reason": "No matching spans found",
+            }
+        )
 
 # Save unmatched data for further review
 unmatched_df = pd.DataFrame(unmatched_data)
-unmatched_df.to_excel("component_warranty_model/Data/Xiaomi/unmatched_cases.xlsx", index=False)
+unmatched_df.to_excel(
+    "component_warranty_model/Data/Xiaomi/unmatched_cases.xlsx", index=False
+)
 
 # Set up the optimizer for training
 optimizer = nlp.resume_training()
+
 
 def calculate_training_params(training_data_size):
     """
@@ -101,6 +117,7 @@ def calculate_training_params(training_data_size):
         batch_size = 128
         epochs = 10
     return batch_size, epochs
+
 
 # Determine batch size and epoch count based on training data size
 training_data_size = len(training_data)
