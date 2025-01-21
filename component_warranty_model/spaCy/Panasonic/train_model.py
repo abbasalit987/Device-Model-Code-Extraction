@@ -9,6 +9,9 @@ from spacy.tokenizer import Tokenizer
 # Load spaCy model
 nlp = spacy.load("en_core_web_sm")
 
+# Disable unnecessary spaCy pipeline components to improve performance
+nlp.disable_pipes("lemmatizer", "tagger", "parser")
+
 # Custom tokenizer to prevent splitting on spaces, hyphens, and other special characters
 infix_re = re.compile(r'''[.\-/():#|+]''')  # Customize for dots, hyphens, colons, parentheses
 nlp.tokenizer = Tokenizer(nlp.vocab, infix_finditer=infix_re.finditer)
@@ -86,7 +89,7 @@ unmatched_df = pd.DataFrame(unmatched_data)
 unmatched_df.to_excel("component_warranty_model/Data/Panasonic/unmatched_cases.xlsx", index=False)
 
 # Set up the optimizer for training
-optimizer = nlp.resume_training()
+optimizer = nlp.begin_training()
 
 def calculate_training_params(training_data_size):
     """

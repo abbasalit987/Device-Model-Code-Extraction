@@ -19,7 +19,7 @@ panasonic_regex_patterns = {
 # File paths
 input_file_path = "component_warranty_model/Data/Panasonic/extracted_models_panasonic.xlsx"
 input_data_sheet_name = "Sample Data 004"
-output_data_sheet_name = "Extracted Models 004"
+output_data_sheet_name = "Extracted Models 005"
 
 # Load the spaCy model
 nlp = spacy.load("component_warranty_model/spaCy/Panasonic/fine_tune_model")
