@@ -3,25 +3,39 @@ import random
 import pandas as pd
 import re
 import uvicorn
+import io
 from spacy.training import Example, offsets_to_biluo_tags
 from spacy.tokenizer import Tokenizer
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
-
 app = FastAPI()
 
 
+# Models for Request Validation
 class TrainRequest(BaseModel):
+    s3_obj: dict
     brand: str
     training_type: str = "resume"
 
 
+class ExtractModelRequest(BaseModel):
+    device_details: dict = {}
+    s3_obj: dict = {}
+
+
+# Utility Functions
+def configure_tokenizer(nlp):
+    """Configure custom tokenizer for special characters."""
+    nlp.tokenizer = Tokenizer(
+        nlp.vocab, infix_finditer=re.compile(r"[.\-/():#|+]").finditer
+    )
+
+
 def extract_model_spans(text, extracted_model):
-    """Matches model codes in text using regex."""
+    """Extract model spans using regex."""
     if not isinstance(text, str) or not isinstance(extracted_model, str):
         return []
-
     pattern = (
         re.escape(extracted_model).replace(r"\-", r"[-\s]*").replace(r"\.", r"[.\s]*")
     )
@@ -30,8 +44,60 @@ def extract_model_spans(text, extracted_model):
     return [(match.start(), match.end(), "MODEL")] if match else []
 
 
+def prepare_training_data(nlp, df):
+    """Prepare spaCy-compatible training data."""
+    training_data, unmatched_data = [], []
+
+    for _, row in df.iterrows():
+        text, extracted_model = row["Model Description"], row["Model Code"]
+        entities = extract_model_spans(text, extracted_model)
+
+        if entities:
+            doc = nlp.make_doc(text)
+            training_data.append(Example.from_dict(doc, {"entities": entities}))
+        else:
+            unmatched_data.append({"text": text, "extracted_model": extracted_model})
+
+    return training_data, unmatched_data
+
+
+def train_ner_model(s3_obj, training_type="resume"):
+    """Train spaCy NER model."""
+    training_data_df = pd.read_excel(io.BytesIO(s3_obj["Body"].read()))
+    brand = training_data_df.iloc[0]["BRAND"]
+    model_path = f"component_warranty_model/spaCy/{brand}/fine_tune_model"
+
+    nlp = (
+        spacy.load("en_core_web_sm")
+        if training_type != "resume"
+        else spacy.load(model_path)
+    )
+    configure_tokenizer(nlp)
+
+    ner = nlp.create_pipe("ner") if "ner" not in nlp.pipe_names else nlp.get_pipe("ner")
+    ner.add_label("MODEL")
+
+    training_data, unmatched_data = prepare_training_data(nlp, training_data_df)
+    pd.DataFrame(unmatched_data).to_excel(
+        f"component_warranty_model/Data/{brand}/unmatched_cases.xlsx", index=False
+    )
+
+    optimizer = (
+        nlp.resume_training() if training_type == "resume" else nlp.begin_training()
+    )
+    batch_size, epochs = calculate_training_params(len(training_data))
+
+    for epoch in range(epochs):
+        random.shuffle(training_data)
+        for batch in spacy.util.minibatch(training_data, size=batch_size):
+            nlp.update(batch, sgd=optimizer)
+
+    nlp.to_disk(model_path)
+    print(f"Training completed for {brand}!")
+
+
 def calculate_training_params(size):
-    """Calculate batch size and epochs based on training data size."""
+    """Determine batch size and epochs based on data size."""
     if size <= 500:
         return 8, 50
     elif size <= 5000:
@@ -39,122 +105,79 @@ def calculate_training_params(size):
     return 128, 10
 
 
-def prepare_training_data(nlp, df):
-    """Prepare spaCy-compatible training data and print alignment using BILOU tags."""
-    unmatched_data = []
-    training_data = []
+def process_dataframe(df):
+    """Group and process DataFrame by brand."""
+    grouped = df.groupby("BRAND")
+    processed_dfs = []
 
-    for _, row in df.iterrows():
-        text = row["Model Description"]
-        extracted_model = row["Model Code"]
-
-        # Extract entity spans
-        entities = extract_model_spans(text, extracted_model)
-
-        if entities:
-            # Create a Doc and convert to BILOU tags
-            doc = nlp.make_doc(text)
-            biluo_tags = offsets_to_biluo_tags(doc, entities)
-
-            # Print the alignment check
-            print(f"Text: {text}")
-            print(f"BILOU tags: {biluo_tags}")
-
-            # Create the Example and append it
-            annotations = {"entities": entities}
-            training_data.append(Example.from_dict(doc, annotations))
-        else:
-            unmatched_data.append(
-                {
-                    "text": text,
-                    "extracted_model": extracted_model,
-                    "reason": "No matching spans found",
-                }
+    for brand, group_df in grouped:
+        try:
+            nlp = spacy.load(f"component_warranty_model/spaCy/{brand}/fine_tune_model")
+            group_df["Model Code"] = group_df["Model Description"].apply(
+                lambda desc: [
+                    ent.text for ent in nlp(desc).ents if ent.label_ == "MODEL"
+                ]
+            )
+            processed_dfs.append(group_df)
+        except Exception as e:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to load model for brand '{brand}': {str(e)}",
             )
 
-    return training_data, unmatched_data
+    return pd.concat(processed_dfs).sort_values(by=["BRAND", "Model Description"])
 
 
-def save_unmatched_data(data, brand):
-    """Save unmatched data to an Excel file."""
-    pd.DataFrame(data).to_excel(
-        f"component_warranty_model/Data/{brand}/unmatched_cases.xlsx", index=False
-    )
-
-
-def configure_tokenizer(nlp):
-    """Configure custom tokenizer for special characters."""
-    nlp.tokenizer = Tokenizer(
-        nlp.vocab, infix_finditer=re.compile(r"[.\-/():#|+]").finditer
-    )
-
-
-def train_ner_model(brand, training_type="resume"):
-    """Train spaCy NER model for a given brand."""
-    nlp = (
-        spacy.load("en_core_web_sm")
-        if training_type != "resume"
-        else spacy.load(f"component_warranty_model/spaCy/{brand}/fine_tune_model")
-    )
-
-    # Disable unnecessary components
-    nlp.disable_pipes(
-        "lemmatizer", "tagger", "parser", "ner"
-    )  # Disable all but NER (if you're training)
-
-    # Configure tokenizer for special characters
-    configure_tokenizer(nlp)
-
-    ner = nlp.create_pipe("ner") if "ner" not in nlp.pipe_names else nlp.get_pipe("ner")
-    ner.add_label("MODEL")
-
-    # Load and prepare data
-    df = pd.read_excel(
-        f"component_warranty_model/Data/{brand}/extracted_models_{brand.lower()}.xlsx",
-        sheet_name="Extracted Models 004",
-    )
-    training_data, unmatched_data = prepare_training_data(nlp, df)
-
-    save_unmatched_data(unmatched_data, brand)
-
-    # Set up optimizer
-    optimizer = (
-        nlp.resume_training() if training_type == "resume" else nlp.begin_training()
-    )
-    batch_size, epochs = calculate_training_params(len(training_data))
-
-    print(
-        f"Training data size: {len(training_data)} | Batch size: {batch_size} | Epochs: {epochs}"
-    )
-
-    # Training loop
-    for epoch in range(epochs):
-        random.shuffle(training_data)
-        for batch in spacy.util.minibatch(training_data, size=batch_size):
-            nlp.update(batch, sgd=optimizer)
-
-    # Save fine-tuned model
-    nlp.to_disk(f"component_warranty_model/spaCy/{brand}/fine_tune_model")
-    print(f"Training completed for {brand}!")
-
-
+# FastAPI Endpoints
 @app.post("/train")
 async def train_endpoint(request: TrainRequest):
     try:
-        train_ner_model(request.brand, request.training_type)
+        train_ner_model(request.s3_obj, request.training_type)
         return {"message": f"Training completed for {request.brand}!"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/extract")
+def extract_model_codes(request: ExtractModelRequest):
+    try:
+        if request.device_details:
+            brand, model_desc = (
+                request.device_details["brand"],
+                request.device_details["model"],
+            )
+            nlp = spacy.load(f"component_warranty_model/spaCy/{brand}/fine_tune_model")
+            identified_models = [
+                ent.text for ent in nlp(model_desc).ents if ent.label_ == "MODEL"
+            ]
+            return {"status": "success", "entities": identified_models or []}
+
+        if request.s3_obj:
+            extract_data_df = pd.read_excel(io.BytesIO(request.s3_obj["Body"].read()))
+            if not {"BRAND", "Model Description"}.issubset(extract_data_df.columns):
+                raise HTTPException(
+                    status_code=400,
+                    detail="The DataFrame must have 'BRAND' and 'Model Description' columns.",
+                )
+
+            result_df = process_dataframe(extract_data_df)
+            return {
+                "status": "success",
+                "message": "Model codes extracted successfully.",
+                "extracted_data": result_df.to_dict(orient="records"),
+            }
+
+        raise HTTPException(
+            status_code=400, detail="Either device_details or s3_obj must be provided."
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/")
 def root():
-    return {"message": "Hello World"}
+    return {"message": "Hello! Welcome to Model Code Extraction Portal"}
 
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=9500, reload=True)
-
-# Example usage:
-# POST to /train with payload:
-# { "brand": "Samsung", "training_type": "resume" }
