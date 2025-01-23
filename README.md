@@ -202,5 +202,5 @@ CMD ["uvicorn", "component_warranty_model.main:app", "--host", "0.0.0.0", "--por
 
 ## Contact
 
-For questions or suggestions, feel free to reach out via GitHub or email.
+For questions or suggestions, feel free to reach out via GitHub or email - abbasalit987@gmail.com
 
