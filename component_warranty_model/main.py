@@ -62,38 +62,52 @@ def prepare_training_data(nlp, df):
 
 
 def train_ner_model(s3_obj, training_type="resume"):
-    """Train spaCy NER model."""
+    """Train spaCy NER models for each brand."""
     training_data_df = pd.read_excel(io.BytesIO(s3_obj["Body"].read()))
-    brand = training_data_df.iloc[0]["BRAND"]
-    model_path = f"component_warranty_model/spaCy/{brand}/fine_tune_model"
 
-    nlp = (
-        spacy.load("en_core_web_sm")
-        if training_type != "resume"
-        else spacy.load(model_path)
-    )
-    configure_tokenizer(nlp)
+    grouped_by_brand = training_data_df.groupby("Brand")
 
-    ner = nlp.create_pipe("ner") if "ner" not in nlp.pipe_names else nlp.get_pipe("ner")
-    ner.add_label("MODEL")
+    for brand, brand_data in grouped_by_brand:
+        try:
+            model_path = f"component_warranty_model/spaCy/{brand}/fine_tune_model"
+            nlp = (
+                spacy.load("en_core_web_sm")
+                if training_type != "resume"
+                else spacy.load(model_path)
+            )
+            configure_tokenizer(nlp)
+            ner = (
+                nlp.create_pipe("ner")
+                if "ner" not in nlp.pipe_names
+                else nlp.get_pipe("ner")
+            )
+            ner.add_label("MODEL")
 
-    training_data, unmatched_data = prepare_training_data(nlp, training_data_df)
-    pd.DataFrame(unmatched_data).to_excel(
-        f"component_warranty_model/Data/{brand}/unmatched_cases.xlsx", index=False
-    )
+            training_data, unmatched_data = prepare_training_data(nlp, brand_data)
 
-    optimizer = (
-        nlp.resume_training() if training_type == "resume" else nlp.begin_training()
-    )
-    batch_size, epochs = calculate_training_params(len(training_data))
+            pd.DataFrame(unmatched_data).to_excel(
+                f"component_warranty_model/Data/{brand}/unmatched_cases.xlsx",
+                index=False,
+            )
 
-    for epoch in range(epochs):
-        random.shuffle(training_data)
-        for batch in spacy.util.minibatch(training_data, size=batch_size):
-            nlp.update(batch, sgd=optimizer)
+            optimizer = (
+                nlp.resume_training()
+                if training_type == "resume"
+                else nlp.begin_training()
+            )
+            batch_size, epochs = calculate_training_params(len(training_data))
 
-    nlp.to_disk(model_path)
-    print(f"Training completed for {brand}!")
+            # Training loop
+            for epoch in range(epochs):
+                random.shuffle(training_data)
+                for batch in spacy.util.minibatch(training_data, size=batch_size):
+                    nlp.update(batch, sgd=optimizer)
+
+            nlp.to_disk(model_path)
+            print(f"Training completed for {brand}!")
+
+        except Exception as e:
+            print(f"Failed to train model for brand '{brand}': {str(e)}")
 
 
 def calculate_training_params(size):
@@ -133,7 +147,7 @@ def process_dataframe(df):
 async def train_endpoint(request: TrainRequest):
     try:
         train_ner_model(request.s3_obj, request.training_type)
-        return {"message": f"Training completed for {request.brand}!"}
+        return {"message": f"Training completed for the data input!"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -154,10 +168,10 @@ def extract_model_codes(request: ExtractModelRequest):
 
         if request.s3_obj:
             extract_data_df = pd.read_excel(io.BytesIO(request.s3_obj["Body"].read()))
-            if not {"BRAND", "Model Description"}.issubset(extract_data_df.columns):
+            if not {"Brand", "Model Description"}.issubset(extract_data_df.columns):
                 raise HTTPException(
                     status_code=400,
-                    detail="The DataFrame must have 'BRAND' and 'Model Description' columns.",
+                    detail="The DataFrame must have 'Brand' and 'Model Description' columns.",
                 )
 
             result_df = process_dataframe(extract_data_df)
